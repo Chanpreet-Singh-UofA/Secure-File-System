@@ -4,8 +4,8 @@
 # Group members:- Chanpreet and Gurbani
 #*-------------------------------------------*
 
-import subprocess
 import os
+import sqlite3
 
 class Group:
     def __init__(self, groupName):
@@ -21,8 +21,6 @@ class Group:
 
 
 
-
-
 if __name__ == '__main__':
     print("*-------------------------------------------*")
     print("The Secure File System")
@@ -35,6 +33,18 @@ if __name__ == '__main__':
     groupList = []
     sfs = directory+">>SFS>>"
     sfst=">>SFS>>"
+
+    connection = sqlite3.connect("SFS.db")
+    cur = connection.cursor()
+    #already in DB
+    #CREATE TABLE sfsFiles( fileUserName TEXT PRIMARY KEY, fileDirectory TEXT, fileContent TEXT, fileName TEXT, filePermission TEXT, FOREIGN KEY (fileUserName) REFERENCES sfsUsers (userName) )
+    #CREATE TABLE sfsUsers ( userName TEXT PRIMARY KEY, groupName TEXT, homeDirectory TEXT )
+    cur.execute("SELECT * FROM sfsUsers")
+    records = cur.fetchall()
+    #print(type(records))
+    #print(records[0][1])
+
+    exit()
 
     while(True):
         

@@ -34,17 +34,19 @@ if __name__ == '__main__':
     sfs = directory+">>SFS>>"
     sfst=">>SFS>>"
 
+    authenticated = 0
+    currentUser=""
+
     connection = sqlite3.connect("SFS.db")
-    cur = connection.cursor()
+    cursor = connection.cursor()
     #already in DB
-    #CREATE TABLE sfsFiles( fileUserName TEXT PRIMARY KEY, fileDirectory TEXT, fileContent TEXT, fileName TEXT, filePermission TEXT, FOREIGN KEY (fileUserName) REFERENCES sfsUsers (userName) )
-    #CREATE TABLE sfsUsers ( userName TEXT PRIMARY KEY, groupName TEXT, homeDirectory TEXT )
-    cur.execute("SELECT * FROM sfsUsers")
-    records = cur.fetchall()
+    #CREATE TABLE sfsFiles( fileDirectory TEXT PRIMARY KEY, fileName TEXT, fileEncryptedName TEXT, fileContent TEXT,  fileUserName TEXT, filePermission TEXT, FOREIGN KEY (fileUserName) REFERENCES sfsUsers (userName) )
+    #CREATE TABLE sfsUsers ( userName TEXT PRIMARY KEY, groupName TEXT, userPassword, homeDirectory TEXT )
+    #cur.execute("SELECT * FROM sfsUsers")
+    #records = cur.fetchall()
     #print(type(records))
     #print(records[0][1])
 
-    exit()
 
     while(True):
         
@@ -60,26 +62,124 @@ if __name__ == '__main__':
             sfs = os.getcwd()+sfst
 
 
-        elif(command.find("mkuser")!=-1):      # mkuser groupA user1
-            userGroup= command.split(" ",2)
-            
-            userGroupIndex = (next(filter(lambda x: x[1].groupName == userGroup[1], enumerate(groupList)))[0])
-            groupList[userGroupIndex].AddUser(userGroup[2])
-            print("User Created: "+userGroup[2]+ " in group: " +userGroup[1])
-            os.chdir(sfsDirectory+"/"+userGroup[1])
-            os.mkdir(userGroup[2]) 
-            os.chdir(userGroup[2])
-            sfs = os.getcwd()+sfst
+        elif(command.find("mkuser")!=-1):      # mkuser groupA username1 password1  
+            if(authenticated == 111):
+                userGroup= command.split(" ",3)
+                #userGroupIndex = (next(filter(lambda x: x[1].groupName == userGroup[1], enumerate(groupList)))[0])
+                #groupList[userGroupIndex].AddUser(userGroup[2])
+                print("User Created: "+userGroup[2]+ " in group: " +userGroup[1])
+                os.chdir(sfsDirectory+"/"+userGroup[1])
+                os.mkdir(userGroup[2]) 
+                os.chdir(userGroup[2])
+                cursor.execute("INSERT INTO sfsUsers VALUES(\""+userGroup[2]+"\",\""+userGroup[1]+"\",\""+userGroup[3]+"\",\""+os.getcwd()+"\")")
+                sfs = os.getcwd()+sfst
+                connection.commit()
+            else:
+                print("You do not have permission to create a users, please reach out to admin user.")
 
         elif(command.find("mkdir")!=-1):
-            command= command.split(" ",1)
-            os.mkdir(command[1]) 
+            if(authenticated == 111):
+                command= command.split(" ",1)
+                os.mkdir(command[1]) 
+                sfs = os.getcwd()+sfst
+            else:
+                print("You do not have permission to create a directory, please reach out to admin user.")
+
+        elif(command.find("login")!=-1): # login username password
+            command= command.split(" ")
+            username = command[1]
+            password = command[2]
+            cursor.execute("SELECT COUNT(userName),homeDirectory from sfsUsers WHERE userName=\""+username+ "\" AND userPassword=\""+password+"\"")
+            records = cursor.fetchall()
+            print(records[0])
+            if(records[0][0] == 1):
+                print("Log in Successful. Welcome "+username)
+                os.chdir(records[0][1]) 
+                currentUser=username
+                if(username == "admin" and password == "admin"):
+                    authenticated = 111
+                else:
+                    authenticated = 1
+                sfs = os.getcwd()+sfst
+            else:
+                print("Log in Unsuccessful. Try again.")
+
+        elif(command.find("logout")!=-1): # logout
+            print("Log out Successful. Thank you")
+            os.chdir(sfsDirectory) 
+            authenticated = 0
             sfs = os.getcwd()+sfst
 
-        elif(command.find("cd")!=-1):
+        elif(command.find("cd")!=-1): # need full URL - /Users/chanpreet/Desktop/SFS/Secure-File-System/groupA/user3
             command= command.split(" ",1)
-            sfsDirectory = os.getcwd()
-            os.chdir(command[1])
-            sfs = os.getcwd()+sfst
+            changeToDir = command[1].replace(sfsDirectory+"/","")
+            changeToDir= changeToDir.split("/",1)
+            changeToDir = changeToDir[0]
+            currentDir = os.getcwd()
+
+            if(currentDir.find(changeToDir)!=-1):
+                os.chdir(command[1])
+                sfs = os.getcwd()+sfst
+            else:
+                print("You do not belong to "+changeToDir+". Thus, you cannot access that directory.")
+
+        elif(command.find("ls")!=-1):
+            files = [f for f in os.listdir('.') if os.path.isfile(f)]
+            for f in files:
+                #if(f.find("\\x")):
+                    #decoded_fileName = f.decode(encoding='cp037')
+                    #print(decoded_fileName)
+                #else:
+                print(f)
+
+        elif(command.find("pwd")!=-1):
+            print(os.getcwd())
+        
+        elif(command.find("touch")!=-1): #touch user.txt - used to create a new file
+            command= command.split(" ",1)
+            os.close(os.open(command[1], os.O_CREAT))
+            currentDir = os.getcwd()
+            enc_fileName = command[1].encode(encoding='cp037')
+            cursor.execute("INSERT INTO sfsFiles VALUES(\""+ (currentDir+"/"+command[1])  +"\",\""+ command[1] +"\",\""+ str(enc_fileName)  +"\",\""+  "" +"\",\""+ currentUser +"\",\""+ "rwa" +"\")")
+            connection.commit()
+            #old_name = os.getcwd()+"/"+command[1]
+            #new_name = os.getcwd()+"/"+str(enc_fileName)+".txt"
+            # Renaming the file
+            #os.rename(old_name, new_name)  
+
+        elif(command.find("cat")!=-1): #cat user.txt - user to read a file
+            command= command.split(" ",1)
+            currentDir = os.getcwd()
+            with open(command[1],'rb') as f:
+                encoded_content = f.read()
+                if(currentDir.find(currentUser)!=-1):
+                    decoded_content = encoded_content.decode(encoding='cp037',errors='strict')
+                    print(decoded_content)
+                else:
+                    print("You do now belong to this directory, thus you can read the file.")
+                f.close()
+
+        elif(command.find("echo")!=-1): #echo user.txt Hi we are programing 
+            command= command.split(" ",2)
+            print(command[2])
+            str_enc = command[2].encode(encoding='cp037')
+            fileDir = os.getcwd()+"/"+command[1]
+            with open(command[1],'wb') as f:
+                f.write(str_enc)
+                cursor.execute("UPDATE sfsFiles SET fileContent=\""+str(str_enc)+"\" WHERE fileDirectory=\""+fileDir+"\"")
+                connection.commit()
+                f.close()
+
+        elif(command.find("rename")!=-1): #rename oldName newName
+            command= command.split(" ",2)
+            old_name = os.getcwd()+"/"+command[1]
+            new_name = os.getcwd()+"/"+command[2]
+            # Renaming the file
+            os.rename(old_name, new_name)   
+
+        elif(command.find("exit")!=-1): # exit
+            exit()
+
+
             
 

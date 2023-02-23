@@ -6,6 +6,7 @@
 
 import os
 import sqlite3
+import time
 
 class Group:
     def __init__(self, groupName):
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     connection = sqlite3.connect("SFS.db")
     cursor = connection.cursor()
     #already in DB
-    #CREATE TABLE sfsFiles( fileDirectory TEXT PRIMARY KEY, fileName TEXT, fileEncryptedName TEXT, fileContent TEXT,  fileUserName TEXT, filePermission TEXT, FOREIGN KEY (fileUserName) REFERENCES sfsUsers (userName) )
+    #CREATE TABLE sfsFiles( fileDirectory TEXT PRIMARY KEY, fileName TEXT, fileEncryptedName TEXT, fileContent TEXT,  fileUserName TEXT, filePermission TEXT, fileLastModified TEXT, FOREIGN KEY (fileUserName) REFERENCES sfsUsers (userName) )
     #CREATE TABLE sfsUsers ( userName TEXT PRIMARY KEY, groupName TEXT, userPassword, homeDirectory TEXT )
     #cur.execute("SELECT * FROM sfsUsers")
     #records = cur.fetchall()
@@ -89,9 +90,20 @@ if __name__ == '__main__':
             command= command.split(" ")
             username = command[1]
             password = command[2]
+            fileUserName = username
             cursor.execute("SELECT COUNT(userName),homeDirectory from sfsUsers WHERE userName=\""+username+ "\" AND userPassword=\""+password+"\"")
             records = cursor.fetchall()
-            print(records[0])
+            cursor.execute("SELECT fileName,fileLastModified,fileDirectory from sfsFiles WHERE fileUserName=\""+fileUserName+"\"")
+            allRecords = cursor.fetchall()
+
+            
+            for record in allRecords:
+                storedModifiedTime = record[1]
+                actualModifiedTimeRaw = os.path.getmtime(record[2])
+                actualModifiedTime = time.ctime(actualModifiedTimeRaw)
+                if(storedModifiedTime != actualModifiedTime):
+                    print("ALEART: "+record[0]+" was modfied by an external user")
+
             if(records[0][0] == 1):
                 print("Log in Successful. Welcome "+username)
                 os.chdir(records[0][1]) 
@@ -103,12 +115,23 @@ if __name__ == '__main__':
                 sfs = os.getcwd()+sfst
             else:
                 print("Log in Unsuccessful. Try again.")
+            
+
+
 
         elif(command.find("logout")!=-1): # logout
             print("Log out Successful. Thank you")
             os.chdir(sfsDirectory) 
             authenticated = 0
             sfs = os.getcwd()+sfst
+
+            cursor.execute("SELECT fileName,fileLastModified,fileDirectory from sfsFiles WHERE fileUserName=\""+currentUser+"\"")
+            allRecords = cursor.fetchall()
+            for record in allRecords:
+                actualModifiedTimeRaw = os.path.getmtime(record[2])
+                actualModifiedTime = time.ctime(actualModifiedTimeRaw)
+                cursor.execute("UPDATE sfsFiles SET fileLastModified=\""+actualModifiedTime+"\" WHERE fileDirectory=\""+record[2]+"\"")
+                connection.commit()
 
         elif(command.find("cd")!=-1): # need full URL - /Users/chanpreet/Desktop/SFS/Secure-File-System/groupA/user3
             command= command.split(" ",1)
@@ -138,9 +161,12 @@ if __name__ == '__main__':
         elif(command.find("touch")!=-1): #touch user.txt - used to create a new file
             command= command.split(" ",1)
             os.close(os.open(command[1], os.O_CREAT))
-            currentDir = os.getcwd()
+            currentDir = os.getcwd() +"/"+ command[1]
+            print(currentDir)
+            ti_m = os.path.getmtime(currentDir)
+            m_ti = time.ctime(ti_m)
             enc_fileName = command[1].encode(encoding='cp037')
-            cursor.execute("INSERT INTO sfsFiles VALUES(\""+ (currentDir+"/"+command[1])  +"\",\""+ command[1] +"\",\""+ str(enc_fileName)  +"\",\""+  "" +"\",\""+ currentUser +"\",\""+ "rwa" +"\")")
+            cursor.execute("INSERT INTO sfsFiles VALUES(\""+ currentDir+ "\",\""+command[1] +"\",\""+ str(enc_fileName)  +"\",\""+  "" +"\",\""+ currentUser +"\",\""+ "rwa" +"\",\""+m_ti+"\")")
             connection.commit()
             #old_name = os.getcwd()+"/"+command[1]
             #new_name = os.getcwd()+"/"+str(enc_fileName)+".txt"
@@ -164,9 +190,11 @@ if __name__ == '__main__':
             print(command[2])
             str_enc = command[2].encode(encoding='cp037')
             fileDir = os.getcwd()+"/"+command[1]
+            ti_m = os.path.getmtime(fileDir)
+            m_ti = time.ctime(ti_m)
             with open(command[1],'wb') as f:
                 f.write(str_enc)
-                cursor.execute("UPDATE sfsFiles SET fileContent=\""+str(str_enc)+"\" WHERE fileDirectory=\""+fileDir+"\"")
+                cursor.execute("UPDATE sfsFiles SET fileContent=\""+str(str_enc)+"\", fileLastModified=\""+m_ti+"\" WHERE fileDirectory=\""+fileDir+"\"")
                 connection.commit()
                 f.close()
 
@@ -175,46 +203,7 @@ if __name__ == '__main__':
             old_name = os.getcwd()+"/"+command[1]
             new_name = os.getcwd()+"/"+command[2]
             # Renaming the file
-            os.rename(old_name, new_name)
-
-        #Setting File & Directory Permissions 
-        
-        #authenticate user? -- pending 
-        if (command.find("user")!=-1):          #user - default mode
-            given_path = input("Please enter the directory or file you want to set permissions for: ")
-            os.chmod(given_path, 0o600)         #set the permissions for read and write for the owner only
-            
-            permissions = os.stat(given_path).st_mode  #get permissions info
-            #check if the permissions were successfully granted to the owner only
-            if permissions & 0o600:
-                print("Permissions successfully granted to the owner only!")
-            
-        elif (command.find("group")!=-1):       #group - all members of the group have read and write permissions
-            given_path = input("Please enter the directory or file you want to set permissions for: ")
-            os.chmod(given_path, 0o060)         #set the permissions for read and write for the group only
-            
-            permissions = os.stat(given_path).st_mode  #get permissions info
-            #check if the permissions were successfully granted to the group only
-            if permissions & 0o060:
-                print("Permissions successfully granted to the group only!")
-
-        elif (command.find("internal")!=-1):    #internal - all internal users have read and write permissions
-            given_path = input("Please enter the directory or file you want to set permissions for: ")     #set the permissions for read and write for the internal users only
-            os.chmod(given_path, 0o066)
-
-            permissions = os.stat(given_path).st_mode  #get permissions info
-            #check if the permissions were successfully granted to the internal users only
-            if permissions & 0o066:
-                print("Permissions successfully granted to the internal users only!")
-
-        elif (command.find("all")!=-1):         #all - all users i.e., owner, group and internal users have read and write permissions
-            given_path = input("Please enter the directory or file you want to set permissions for: ")         #set the permissions for read and write for all users i.e., owner, group and internal users
-            os.chmod(given_path, 0o666)
-
-            permissions = os.stat(given_path).st_mode  #get permissions info
-            #check if the permissions were successfully granted to all users
-            if permissions & 0o066:
-                print("Permissions successfully granted to all users!")   
+            os.rename(old_name, new_name)   
 
         elif(command.find("exit")!=-1): # exit
             exit()

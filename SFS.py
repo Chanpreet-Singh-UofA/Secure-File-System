@@ -175,7 +175,46 @@ if __name__ == '__main__':
             old_name = os.getcwd()+"/"+command[1]
             new_name = os.getcwd()+"/"+command[2]
             # Renaming the file
-            os.rename(old_name, new_name)   
+            os.rename(old_name, new_name)
+
+        #Setting File & Directory Permissions 
+        
+        #authenticate user? -- pending 
+        if (command.find("user")!=-1):          #user - default mode
+            given_path = input("Please enter the directory or file you want to set permissions for: ")
+            os.chmod(given_path, 0o600)         #set the permissions for read and write for the owner only
+            
+            permissions = os.stat(given_path).st_mode  #get permissions info
+            #check if the permissions were successfully granted to the owner only
+            if permissions & 0o600:
+                print("Permissions successfully granted to the owner only!")
+            
+        elif (command.find("group")!=-1):       #group - all members of the group have read and write permissions
+            given_path = input("Please enter the directory or file you want to set permissions for: ")
+            os.chmod(given_path, 0o060)         #set the permissions for read and write for the group only
+            
+            permissions = os.stat(given_path).st_mode  #get permissions info
+            #check if the permissions were successfully granted to the group only
+            if permissions & 0o060:
+                print("Permissions successfully granted to the group only!")
+
+        elif (command.find("internal")!=-1):    #internal - all internal users have read and write permissions
+            given_path = input("Please enter the directory or file you want to set permissions for: ")     #set the permissions for read and write for the internal users only
+            os.chmod(given_path, 0o066)
+
+            permissions = os.stat(given_path).st_mode  #get permissions info
+            #check if the permissions were successfully granted to the internal users only
+            if permissions & 0o066:
+                print("Permissions successfully granted to the internal users only!")
+
+        elif (command.find("all")!=-1):         #all - all users i.e., owner, group and internal users have read and write permissions
+            given_path = input("Please enter the directory or file you want to set permissions for: ")         #set the permissions for read and write for all users i.e., owner, group and internal users
+            os.chmod(given_path, 0o666)
+
+            permissions = os.stat(given_path).st_mode  #get permissions info
+            #check if the permissions were successfully granted to all users
+            if permissions & 0o066:
+                print("Permissions successfully granted to all users!")   
 
         elif(command.find("exit")!=-1): # exit
             exit()

@@ -8,6 +8,9 @@ import os
 import sqlite3
 import time
 
+
+
+
 class Group:
     def __init__(self, groupName):
         self.groupName = groupName
@@ -20,6 +23,57 @@ class Group:
     def AddUser(self,name):
         self.userNames.append(name)
 
+#https://likegeeks.com/python-caesar-cipher/
+def cipher_encrypt(plain_text, key):
+    encrypted = ""
+    for c in plain_text:
+        if c.isupper(): #check if it's an uppercase character
+            c_index = ord(c) - ord('A')
+            # shift the current character by key positions
+            c_shifted = (c_index + key) % 26 + ord('A')
+            c_new = chr(c_shifted)
+            encrypted += c_new
+        elif c.islower(): #check if its a lowecase character
+            # subtract the unicode of 'a' to get index in [0-25) range
+            c_index = ord(c) - ord('a') 
+            c_shifted = (c_index + key) % 26 + ord('a')
+            c_new = chr(c_shifted)
+            encrypted += c_new
+        elif c.isdigit():
+            # if it's a number,shift its actual value 
+            c_new = (int(c) + key) % 10
+            encrypted += str(c_new)
+        else:
+            # if its neither alphabetical nor a number, just leave it like that
+            encrypted += c
+    return encrypted
+
+# The Decryption Function #https://likegeeks.com/python-caesar-cipher/
+def cipher_decrypt(ciphertext, key):
+    decrypted = ""
+    for c in ciphertext:
+        if c.isupper(): 
+            c_index = ord(c) - ord('A')
+            # shift the current character to left by key positions to get its original position
+            c_og_pos = (c_index - key) % 26 + ord('A')
+            c_og = chr(c_og_pos)
+            decrypted += c_og
+        elif c.islower(): 
+            c_index = ord(c) - ord('a') 
+            c_og_pos = (c_index - key) % 26 + ord('a')
+            c_og = chr(c_og_pos)
+            decrypted += c_og
+        elif c.isdigit():
+            # if it's a number,shift its actual value 
+            c_og = (int(c) - key) % 10
+            decrypted += str(c_og)
+        else:
+            # if its neither alphabetical nor a number, just leave it like that
+            decrypted += c
+    return decrypted
+
+
+
 
 
 if __name__ == '__main__':
@@ -27,9 +81,9 @@ if __name__ == '__main__':
     print("The Secure File System")
     print("*-------------------------------------------*")
 
-    directory = os.getcwd()
+    directory = os.getcwd()+"/SFsystem"
     print(directory)
-    sfsDirectory = os.getcwd()
+    sfsDirectory = os.getcwd()+"/SFsystem"
 
     groupList = []
     sfs = directory+">>SFS>>"
@@ -78,6 +132,8 @@ if __name__ == '__main__':
             else:
                 print("You do not have permission to create a users, please reach out to admin user.")
 
+                #setpermission <filepath> <username> <r-rw-w>
+
         elif(command.find("mkdir")!=-1):
             if(authenticated == 111):
                 command= command.split(" ",1)
@@ -87,6 +143,36 @@ if __name__ == '__main__':
                 print("You do not have permission to create a directory, please reach out to admin user.")
 
         elif(command.find("login")!=-1): # login username password
+            username = command[1]
+            if(username != "admin"):
+                root_path=sfsDirectory
+                paths = []
+                for root, dirs, files in os.walk(root_path):
+                    for name in files:
+                        paths.append(os.path.join(root, name))
+                    for name in dirs:
+                        paths.append(os.path.join(root, name))
+                print(paths)
+
+                for path in reversed(paths):
+                    print(path)
+                    fileName = path.split('/')[-1]
+                    print("fileName - " +fileName)
+                    if not (fileName.startswith('.')):
+                        directoryOfFile = path.replace("/"+fileName,"")
+                        print("directoryOfFile - " + directoryOfFile)
+                        shift = 3
+                        print("fileName - " +fileName)
+                        decryptedFileName = cipher_decrypt(fileName, shift)
+                        print("decryptedFileName - "+decryptedFileName)
+                        newpath = directoryOfFile+"/"+decryptedFileName
+                        print(newpath)
+                        print(path)
+                        if os.path.exists(path):
+                            os.rename(path,newpath)
+                       
+
+
             command= command.split(" ")
             username = command[1]
             password = command[2]
@@ -115,6 +201,8 @@ if __name__ == '__main__':
                 sfs = os.getcwd()+sfst
             else:
                 print("Log in Unsuccessful. Try again.")
+
+
             
 
 
@@ -132,6 +220,32 @@ if __name__ == '__main__':
                 actualModifiedTime = time.ctime(actualModifiedTimeRaw)
                 cursor.execute("UPDATE sfsFiles SET fileLastModified=\""+actualModifiedTime+"\" WHERE fileDirectory=\""+record[2]+"\"")
                 connection.commit()
+
+            root_path=sfsDirectory
+            paths = []
+            for root, dirs, files in os.walk(root_path):
+                for name in files:
+                    paths.append(os.path.join(root, name))
+                for name in dirs:
+                    paths.append(os.path.join(root, name))
+            print(paths)
+
+
+
+            for path in reversed(paths):
+                fileName = path.split('/')[-1]
+                if not (fileName.startswith('.')):
+                    directoryOfFile = path.replace("/"+fileName,"")
+                    shift = 3
+                    encryptedFileName = cipher_encrypt(fileName, shift)
+                    newpath = directoryOfFile+"/"+encryptedFileName
+                    os.rename(path, newpath)
+
+
+
+
+
+
 
         elif(command.find("cd")!=-1): # need full URL - /Users/chanpreet/Desktop/SFS/Secure-File-System/groupA/user3
             command= command.split(" ",1)
@@ -176,13 +290,14 @@ if __name__ == '__main__':
         elif(command.find("cat")!=-1): #cat user.txt - user to read a file
             command= command.split(" ",1)
             currentDir = os.getcwd()
+            print(command[1])
             with open(command[1],'rb') as f:
                 encoded_content = f.read()
                 if(currentDir.find(currentUser)!=-1):
                     decoded_content = encoded_content.decode(encoding='cp037',errors='strict')
                     print(decoded_content)
                 else:
-                    print("You do now belong to this directory, thus you can read the file.")
+                    print("You do now belong to this directory, thus you cannot read the file.")
                 f.close()
 
         elif(command.find("echo")!=-1): #echo user.txt Hi we are programing 
@@ -207,6 +322,8 @@ if __name__ == '__main__':
 
         elif(command.find("exit")!=-1): # exit
             exit()
+
+
 
 
             
